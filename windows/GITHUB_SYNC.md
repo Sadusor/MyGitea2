@@ -81,3 +81,10 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 - **Convenience scripts added at repository root:** `START MyGitea2.bat`, `STOP MyGitea2.bat`; both use `windows/MyGitea-Hidden.vbs` to launch PowerShell hidden. Original `windows/START MyGitea.bat` and `windows/STOP MyGitea.bat` remain available for console diagnostics.
 - Root START detects an existing MyGitea2 launcher and declines to start another copy. Root STOP stops the MyGitea2 server and its matching PowerShell control-listener launcher; it does not target the old `E:\MyGitea` installation.
 - **Status:** Root BAT/VBS convenience launchers committed, **not yet physically tested**. Verify syntax, hidden operation and START/STOP after preserving runtime status. Never stop the application during imports.
+
+## Hidden STOP GUI regression — 2026-10-09
+
+- **User test:** root START BAT opens MyGitea2 successfully, but root STOP BAT leaves the Chrome app GUI visible. STOP GUI = **FAIL**; START = **PASS**.
+- **Fix committed:** `windows/MyGitea-Control.ps1` now posts a graceful `WM_CLOSE` to visible Chrome windows belonging to processes launched with the dedicated `%LOCALAPPDATA%\MyGitea2\ChromeProfile` profile, including their child processes. It then stops only MyGitea2's `gitea.exe` and the matching local controller. It does **not** target the user's normal Chrome profile or `E:\MyGitea`.
+- **Not yet physically verified:** Pull update, syntax-check, then STOP and START. Verify the MyGitea2 app window closes while ordinary Chrome windows stay open. If it fails, collect the observed behavior before modifying further.
+- The four migration failures (`bifrost`, `cua`, `deepseek-harness`, `n8n`) are **deferred by user request**. Do not retry or change migrations in this STOP/START task.
