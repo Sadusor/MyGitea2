@@ -69,7 +69,7 @@ $panel = New-Object System.Windows.Forms.FlowLayoutPanel
 $panel.Dock = 'Top'
 $panel.Height = 48
 $refresh = New-Object System.Windows.Forms.Button
-$refresh.Text = 'Auto Refresh: ON'
+$refresh.Text = 'Auto Check: ON'
 $refresh.Width = 125
 $pull = New-Object System.Windows.Forms.Button
 $pull.Text = 'Pull GitHub'
@@ -93,7 +93,7 @@ $timer.Add_Tick({
 })
 $refresh.Add_Click({
     $script:autoRefresh = -not $script:autoRefresh
-    $refresh.Text = if ($script:autoRefresh) { 'Auto Refresh: ON' } else { 'Auto Refresh: OFF' }
+    $refresh.Text = if ($script:autoRefresh) { 'Auto Refresh: ON' } else { 'Auto Check: OFF' }
 })
 $pull.Add_Click({
     try { $status.Text = Pull-Source }
