@@ -73,12 +73,26 @@
     };
     const github=field("GitHub personal access token (repository read access)");
     const gitea=field("MyGitea2 API token (repository write access)");
-    formButton("Save Keys",async()=>{
-      if(!github.value.trim()||!gitea.value.trim()){status.textContent="Both keys required";return;}
-      const result=await chrome.runtime.sendMessage({action:"keys",token,data:{github:github.value.trim(),gitea:gitea.value.trim()}});
-      github.value="";gitea.value="";
-      status.textContent=result?.ok?"Keys saved":(result?.payload?.error||"Key save failed");
-      if(result?.ok)panel.style.display="none";
+    const saveButton=formButton("Save Keys",async()=>{
+      if(!token){line("Launcher not connected. Restart MyGitea2 first.");return;}
+      if(!github.value.trim()||!gitea.value.trim()){line("Both keys are required.");return;}
+      saveButton.disabled=true;
+      status.textContent="Saving encrypted keys...";
+      try {
+        const result=await chrome.runtime.sendMessage({action:"keys",token,data:{github:github.value.trim(),gitea:gitea.value.trim()}});
+        if(!result?.ok){
+          const message=result?.payload?.error||result?.payload?.message||"No response from launcher";
+          status.textContent="Keys NOT saved";
+          line("Save failed: "+message);
+          return;
+        }
+        github.value="";gitea.value="";
+        status.textContent="Keys saved and verified";
+        line("Keys saved on this PC. You may close this panel and run Sync GitHub.");
+      }catch(error){
+        status.textContent="Keys NOT saved";
+        line("Save failed: "+String(error.message||error));
+      }finally {saveButton.disabled=false;}
     });
   });
   button("Sync GitHub", async () => {
