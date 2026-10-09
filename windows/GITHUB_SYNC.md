@@ -92,3 +92,29 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 ## Hidden launcher test verified — 2026-10-09
 
 **PASS (user-confirmed):** Root hidden START opens the MyGitea2 app; root STOP closes the Chrome GUI; subsequent read-only Win32_Process enumeration for `powershell.exe` processes with command line containing `E:\MyGitea2\windows\MyGitea-Control.ps1` returned **no matching processes**. This proves no matching MyGitea2 PowerShell launcher remained after STOP. Original Gitea unchanged. Pending: read-only integrity audit for 107 migrated repositories; the four deferred imports remain untouched.
+
+## Read-only Git code-integrity audit — 2026-10-09
+
+**Implementation:** `windows/MyGitea-IntegrityAudit.ps1` compares all GitHub repositories owned by the authenticated user against MyGitea2 repositories for the authenticated Gitea user. It checks **every enumerated branch and tag's 40-character commit object hash**, including GitHub-only and Gitea-only refs. It does **not** clone, push, migrate, update or delete repositories. It writes only local CSV/JSON reports to `%LOCALAPPDATA%\MyGitea2\Audit`.
+
+Run in PowerShell **while MyGitea2 is running**:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "E:\MyGitea2\windows\MyGitea-IntegrityAudit.ps1"
+```
+
+Optional first small test:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "E:\MyGitea2\windows\MyGitea-IntegrityAudit.ps1" -MaxRepositories 1
+```
+
+**Result meanings:**
+- `MATCH`: both locations expose the same enumerated branch names, tag names and commit hashes. This validates Git ref parity, not all Gitea metadata, LFS files or issues.
+- `DIFFERENT`: a branch/tag is missing on one side or a hash differs; source GitHub may have changed after migration.
+- `MISSING`: repository not in current MyGitea2 account.
+- `ERROR`: authentication/API/format error for that repository, not proof of missing code.
+
+Expected starting situation before running (not a predicted result): the user previously observed **107/111 repositories present**, four deferred API migration failures (`bifrost`, `cua`, `deepseek-harness`, `n8n`). No claim of 107 hash matches is made until a report is generated. The integrity script has been committed and reviewed for consistency, but **has not yet passed a physical PowerShell run**.
+
+**Safety:** Never paste GitHub/Gitea tokens in chat; the script reads the existing DPAPI keys locally. Reports include repository names and hashes, not tokens. Do not delete the original `E:\MyGitea` installation based on a single branch comparison.
