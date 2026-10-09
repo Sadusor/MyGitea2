@@ -7,7 +7,6 @@
     history.replaceState(null, "", location.pathname + location.search);
   }
   const token = sessionStorage.getItem(key);
-  if (!token) return;
   const bar = document.createElement("div");
   bar.id = "mygitea2-toolbar";
   bar.style.cssText = "position:fixed;z-index:2147483647;bottom:16px;right:16px;background:#202936;color:#fff;padding:10px 14px;border:1px solid #738095;border-radius:9px;box-shadow:0 4px 22px #0007;display:flex;align-items:center;gap:9px;font:13px system-ui,sans-serif";
@@ -23,9 +22,10 @@
     bar.appendChild(b);
     return b;
   }
-  let auto = false;
-  const autoButton = button("Auto Refresh: OFF", () => {
+  let auto = sessionStorage.getItem("mygitea2-auto-refresh") === "yes";
+  const autoButton = button("Auto Refresh: " + (auto ? "ON" : "OFF"), () => {
     auto = !auto;
+    sessionStorage.setItem("mygitea2-auto-refresh", auto ? "yes" : "no");
     autoButton.textContent = "Auto Refresh: " + (auto ? "ON" : "OFF");
   });
   setInterval(() => {
@@ -34,10 +34,12 @@
     }
   }, 60000);
   const status = document.createElement("span");
+  status.textContent = token ? "Ready" : "Controls need launcher reconnect";
   status.style.maxWidth = "260px";
   status.style.overflow = "hidden";
   status.style.textOverflow = "ellipsis";
   async function action(name) {
+    if (!token) { status.textContent = "Restart MyGitea2 launcher to connect"; return; }
     if (name === "stop" && !confirm("Stop only MyGitea2?")) return;
     status.textContent = name === "pull" ? "Pulling..." : "Stopping...";
     const response = await chrome.runtime.sendMessage({ action: name, token });
