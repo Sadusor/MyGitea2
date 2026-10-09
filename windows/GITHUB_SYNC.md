@@ -50,3 +50,10 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 **Never paste or commit GitHub/Gitea API keys.** DPAPI-backed store is local to the Windows user at `%LOCALAPPDATA%\MyGitea2\keys.dpapi.json`.
 
 **Next safe test:** Click **Sync GitHub** once and inspect **preview only**; verify the GitHub account name and repo counts. Do not press **Import only selected repository** until preview passes. Original `E:\MyGitea` remains protected.
+
+## Preview list regression — 2026-10-09
+
+- **Observed FAIL:** GitHub token and MyGitea2 token both authorized; Sync GitHub preview displayed **1 repository** while the single dropdown option contained many comma-separated `Sadusor/...` names. No import was performed.
+- **Root cause identified in code:** Windows PowerShell API response arrays could be wrapped as one nested array; the preview treated that array as one repository object and interpolated all `full_name` fields together.
+- **Fix:** `windows/MyGitea-Sync.ps1` expands nested arrays for GitHub and Gitea listings, validates each `owner/repo` item, and refuses an invalid preview before any import.
+- **Status:** Committed; **NOT YET TESTED on Windows**. Next test: stop the MyGitea2 *launcher* safely, pull changes, parse-check scripts, restart launcher, use Sync GitHub for **preview only**. Expected: multiple distinct dropdown options and sensible repository count. Do not click Import until verified.
