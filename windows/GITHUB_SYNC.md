@@ -122,3 +122,18 @@ Expected starting situation before running (not a predicted result): the user pr
 ## Read-only audit smoke test — 2026-10-09
 
 **User-confirmed PASS (physical Windows PowerShell run):** `MyGitea-IntegrityAudit.ps1 -MaxRepositories 1` checked `Sadusor/agency-agents`: **MATCH 1, DIFFERENT 0, MISSING 0, ERROR 0**. Reports generated at `%LOCALAPPDATA%\MyGitea2\Audit\integrity-20261009-184944.csv` and corresponding `.json`. The first-run audit therefore exercises authentication and report generation on Windows, but the **full 111-repository audit is still pending**. No repositories modified.
+
+## Full read-only integrity audit — 2026-10-09
+
+**User-confirmed physical run** of `windows/MyGitea-IntegrityAudit.ps1`, 111 GitHub repos examined. Report: `%LOCALAPPDATA%\MyGitea2\Audit\integrity-20261009-185129.csv` and corresponding JSON.
+
+| Result | Count | Names |
+| --- | ---: | --- |
+| MATCH | **98** | See report for full list |
+| DIFFERENT | **2** | `Sadusor/cua`, `Sadusor/MyGitea2` |
+| MISSING | **3** | `Sadusor/bifrost`, `Sadusor/deepseek-harness`, `Sadusor/n8n` |
+| ERROR | **8** | `Sadusor/AiHub`, `Sadusor/assistant`, `Sadusor/Forgetrader`, `Sadusor/KiraPhoneBench`, `Sadusor/ORION-AI-BRIDGE`, `Sadusor/RememberAi`, `Sadusor/w`, `Sadusor/website` |
+
+**Interpretation:** 98 repos have matching exposed Git branch/tag refs and commit IDs. `cua` is **present**, contrary to the earlier four-missing assumption, but Git ref parity differs. `MyGitea2` may differ because the source continues to receive code changes; investigate exact ref mismatches before concluding. Eight ERRORs require inspection of the `Details` field; they do not establish corruption or missing code. No destructive action or new import authorized. User has deferred missing imports. Preserve `E:\MyGitea` original.
+
+**Next safe read-only step:** show CSV rows with status other than MATCH, including `Details`. Diagnose error categories first; keep secrets out of output.
