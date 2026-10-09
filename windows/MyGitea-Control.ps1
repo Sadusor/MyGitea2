@@ -6,6 +6,7 @@ $config = Join-Path $root 'custom\conf\app.ini'
 $data = Join-Path $root 'mygitea2-data'
 $url = 'http://127.0.0.1:3001/'
 $extension = Join-Path $PSScriptRoot 'chrome-extension'
+. (Join-Path $PSScriptRoot 'MyGitea-Sync.ps1')
 
 function Get-MyGiteaProcesses {
     @(Get-CimInstance Win32_Process -Filter "name='gitea.exe'" |
@@ -153,7 +154,7 @@ try {
     )
     Start-Process -FilePath $chrome -ArgumentList $chromeArgs | Out-Null
     Write-Host "MyGitea2: $url"
-    Write-Host 'Keep this PowerShell launcher open for Pull and Stop controls.'
+    Write-Host 'Keep this PowerShell launcher open for Keys, Sync, and Stop controls.'
     while ($true) {
         if (-not $listener.Pending()) {
             Start-Sleep -Milliseconds 150
@@ -176,7 +177,7 @@ try {
                 }
             }
             $origin = [string]$headers['origin']
-            if ($request -match '^OPTIONS /(?:pull|stop) HTTP/') {
+            if ($request -match '^OPTIONS /(?:pull|stop|keys|preview|import) HTTP/') {
                 Send-Reply $stream 200 '' $origin
                 continue
             }
@@ -184,12 +185,37 @@ try {
                 Send-Reply $stream 403 'Unauthorized' $origin
                 continue
             }
-            if ($request -match '^POST /pull HTTP/') {
+            if ($request -match '^POST /(keys|preview|import) HTTP/') {
                 try {
-                    $result = Pull-MyGiteaSource
-                    Send-Reply $stream 200 $result $origin
+                    $length = 0
+                    if ($headers.ContainsKey('content-length')) {
+                        $length = [int]$headers['content-length']
+                    }
+                    if ($length -gt 16384 -or $length -lt 0) { throw 'Request too large.' }
+                    $bodyText = ''
+                    if ($length -gt 0) {
+                        $chars = New-Object char[] $length
+                        $offset = 0
+                        while ($offset -lt $length) {
+                            $n = $reader.Read($chars,$offset,$length-$offset)
+                            if ($n -le 0) { throw 'Incomplete request body.' }
+                            $offset += $n
+                        }
+                        $bodyText = -join $chars
+                    }
+                    $inputData = if ($bodyText) { $bodyText | ConvertFrom-Json } else { $null }
+                    if ($request -match '^POST /keys HTTP/') {
+                        if ($null -eq $inputData) { throw 'Missing keys.' }
+                        $result = Save-MyGiteaKeys ([string]$inputData.github) ([string]$inputData.gitea)
+                    } elseif ($request -match '^POST /preview HTTP/') {
+                        $result = Get-SyncPreview
+                    } else {
+                        if ($null -eq $inputData -or [string]::IsNullOrWhiteSpace($inputData.full_name)) { throw 'Missing repository name.' }
+                        $result = Import-SyncOne ([string]$inputData.full_name)
+                    }
+                    Send-Reply $stream 200 (ConvertTo-Json -InputObject $result -Depth 8 -Compress) $origin
                 } catch {
-                    Send-Reply $stream 500 $_.Exception.Message $origin
+                    Send-Reply $stream 500 (ConvertTo-Json -InputObject @{ error=$_.Exception.Message } -Compress) $origin
                 }
             } elseif ($request -match '^POST /stop HTTP/') {
                 Send-Reply $stream 200 'MyGitea2 stopping' $origin
