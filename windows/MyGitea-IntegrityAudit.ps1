@@ -9,13 +9,13 @@ $url = 'http://127.0.0.1:3001/'
 function Read-AuditPage {
     param([string]$uri,[string]$token,[switch]$Github)
     $raw = Invoke-SyncApi $uri $token -github:$Github
-    if ($null -eq $raw) { return @() }
+    if ($null -eq $raw) { return }
     $array = @($raw | ForEach-Object { $_ })
     # Invoke-RestMethod in Windows PowerShell can produce a single nested array.
     if ($array.Count -eq 1 -and $array[0] -is [array]) {
         $array = @($array[0] | ForEach-Object { $_ })
     }
-    return ,$array
+    foreach ($item in $array) { Write-Output $item }
 }
 function Read-AuditPages {
     param([string]$base,[string]$token,[int]$pageSize=100,[switch]$Github)
@@ -26,7 +26,10 @@ function Read-AuditPages {
           $(if ($Github) { 'per_page=' } else { 'limit=' }) + $pageSize
         $batch = @(Read-AuditPage $endpoint $token -Github:$Github)
         foreach ($entry in $batch) { [void]$all.Add($entry) }
-        if ($batch.Count -lt $pageSize) { return ,$all.ToArray() }
+        if ($batch.Count -lt $pageSize) {
+            foreach ($item in $all) { Write-Output $item }
+            return
+        }
     }
     throw 'Pagination limit exceeded: refusing to report partial audit as complete.'
 }
