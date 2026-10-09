@@ -41,8 +41,8 @@ ROOT_PATH = $isolatedData\log
     $content = Get-Content -Raw $config
     if ($content -notmatch '(?m)^HTTP_PORT\s*=\s*3001\s*$' -or
         $content -notmatch '(?m)^ROOT_URL\s*=\s*http://127\.0\.0\.1:3001/\s*$' -or
-        $content -notmatch [regex]::Escape("PATH = $isolatedData\gitea.db") -or
-        $content -notmatch [regex]::Escape("ROOT = $isolatedData\repositories")) {
+        $content -notlike "*PATH = $isolatedData\gitea.db*" -or
+        $content -notlike "*ROOT = $isolatedData\repositories*") {
         throw "MyGitea2 config is not confirmed isolated: $config"
     }
 }
