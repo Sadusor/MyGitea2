@@ -114,7 +114,7 @@ function Send-Reply {
     if ($origin -match '^chrome-extension://[a-z]{32}$') {
         $lines += "Access-Control-Allow-Origin: $origin"
         $lines += 'Access-Control-Allow-Methods: POST, OPTIONS'
-        $lines += 'Access-Control-Allow-Headers: Authorization'
+        $lines += 'Access-Control-Allow-Headers: Authorization, Content-Type'
     }
     $head = [Text.Encoding]::ASCII.GetBytes(($lines -join [Environment]::NewLine) + [Environment]::NewLine + [Environment]::NewLine)
     $stream.Write($head,0,$head.Length)
