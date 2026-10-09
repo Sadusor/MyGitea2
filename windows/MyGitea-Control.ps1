@@ -65,10 +65,6 @@ PATH = $data\lfs
         [IO.File]::WriteAllText($config, $ini)
     }
     $ini = Get-Content -Raw $config
-    if (-not $ini.Contains('LFS_CONTENT_PATH = ')) {
-        $ini = $ini.Replace('OFFLINE_MODE = true', ('OFFLINE_MODE = true' + [Environment]::NewLine + "LFS_CONTENT_PATH = $data\lfs"))
-        [IO.File]::WriteAllText($config,$ini)
-    }
     $required = @(
         'HTTP_PORT = 3001',
         'HTTP_ADDR = 127.0.0.1',
@@ -78,13 +74,11 @@ PATH = $data\lfs
         "ROOT = $data\repositories",
         "LFS_CONTENT_PATH = $data\lfs"
     )
+    $iniNormalized = $ini.Replace('/', '\')
     foreach ($entry in $required) {
-        if (-not $ini.Contains($entry)) {
+        if (-not $iniNormalized.Contains($entry)) {
             throw "MyGitea2 configuration not fully isolated: missing $entry"
         }
-    }
-    if ($ini -notmatch '(?m)^\[lfs\]') {
-        Add-Content -Path $config -Value ([Environment]::NewLine + '[lfs]' + [Environment]::NewLine + "PATH = $data\lfs")
     }
 }
 function Find-Chrome {
