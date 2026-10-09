@@ -74,9 +74,14 @@ PATH = $data\lfs
         "ROOT = $data\repositories",
         "LFS_CONTENT_PATH = $data\lfs"
     )
-    $iniNormalized = $ini.Replace('/', '\')
     foreach ($entry in $required) {
-        if (-not $iniNormalized.Contains($entry)) {
+        # Normalize filesystem paths only; never alter http:// URLs.
+        $actual = if ($entry -match '^(HTTP_PORT|HTTP_ADDR|ROOT_URL) =') {
+            $ini
+        } else {
+            $ini.Replace('/', '\')
+        }
+        if (-not $actual.Contains($entry)) {
             throw "MyGitea2 configuration not fully isolated: missing $entry"
         }
     }
