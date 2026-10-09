@@ -1,147 +1,206 @@
-param(
-    [ValidateSet('Start','Stop','Pull')][string]$Action = 'Start'
-)
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+param([ValidateSet('Start','Stop','Pull')][string]$Action='Start')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $exe = Join-Path $root 'gitea.exe'
 $config = Join-Path $root 'custom\conf\app.ini'
+$data = Join-Path $root 'mygitea2-data'
 $url = 'http://127.0.0.1:3001/'
-$isolatedData = Join-Path $root 'mygitea2-data'
+$extension = Join-Path $PSScriptRoot 'chrome-extension'
+
+function Get-MyGiteaProcesses {
+    @(Get-CimInstance Win32_Process -Filter "name='gitea.exe'" |
+        Where-Object { $_.ExecutablePath -ieq $exe })
+}
+function Stop-MyGitea {
+    foreach ($proc in (Get-MyGiteaProcesses)) {
+        Stop-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
+    }
+}
+function Pull-MyGiteaSource {
+    $dirty = @(git -C $root status --porcelain --untracked-files=no)
+    if ($LASTEXITCODE -ne 0) { throw 'Git status failed' }
+    if ($dirty.Count -gt 0) { throw 'Tracked changes detected. Pull refused.' }
+    $output = & git -C $root pull --ff-only origin main 2>&1
+    if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
+    return ($output -join [Environment]::NewLine)
+}
 function Ensure-IsolatedConfig {
     if (-not (Test-Path $config)) {
-        $confDir = Split-Path $config -Parent
-        New-Item -ItemType Directory -Path $confDir -Force | Out-Null
-        New-Item -ItemType Directory -Path $isolatedData -Force | Out-Null
+        New-Item -ItemType Directory -Force (Split-Path $config -Parent) | Out-Null
+        New-Item -ItemType Directory -Force $data | Out-Null
         $ini = @"
 APP_NAME = MyGitea2
 RUN_USER = $env:USERNAME
 WORK_PATH = $root
-APP_DATA_PATH = $isolatedData
+APP_DATA_PATH = $data
 
 [server]
 HTTP_ADDR = 127.0.0.1
 HTTP_PORT = 3001
 ROOT_URL = http://127.0.0.1:3001/
 OFFLINE_MODE = true
+LFS_START_SERVER = true
+LFS_CONTENT_PATH = $data\lfs
 
 [database]
 DB_TYPE = sqlite3
-PATH = $isolatedData\gitea.db
+PATH = $data\gitea.db
 
 [repository]
-ROOT = $isolatedData\repositories
+ROOT = $data\repositories
 
 [log]
-ROOT_PATH = $isolatedData\log
+ROOT_PATH = $data\log
+
+[attachment]
+PATH = $data\attachments
+
+[picture]
+AVATAR_UPLOAD_PATH = $data\avatars
+REPOSITORY_AVATAR_UPLOAD_PATH = $data\repo-avatars
+
+[lfs]
+PATH = $data\lfs
 "@
-        [System.IO.File]::WriteAllText($config, $ini)
+        [IO.File]::WriteAllText($config, $ini)
     }
-    $content = Get-Content -Raw $config
-    if ($content -notmatch '(?m)^HTTP_PORT\s*=\s*3001\s*$' -or
-        $content -notmatch '(?m)^ROOT_URL\s*=\s*http://127\.0\.0\.1:3001/\s*$' -or
-        $content -notlike "*PATH = $isolatedData\gitea.db*" -or
-        $content -notlike "*ROOT = $isolatedData\repositories*") {
-        throw "MyGitea2 config is not confirmed isolated: $config"
+    $ini = Get-Content -Raw $config
+    $required = @(
+        'HTTP_PORT = 3001',
+        'HTTP_ADDR = 127.0.0.1',
+        'ROOT_URL = http://127.0.0.1:3001/',
+        "APP_DATA_PATH = $data",
+        "PATH = $data\gitea.db",
+        "ROOT = $data\repositories",
+        "LFS_CONTENT_PATH = $data\lfs"
+    )
+    foreach ($entry in $required) {
+        if (-not $ini.Contains($entry)) {
+            throw "MyGitea2 configuration not fully isolated: missing $entry"
+        }
+    }
+    if ($ini -notmatch '(?m)^\[lfs\]') {
+        Add-Content -Path $config -Value ([Environment]::NewLine + '[lfs]' + [Environment]::NewLine + "PATH = $data\lfs")
     }
 }
-$script:managedChromePid = $null
-function Get-MyGiteaProcesses {
-    @(Get-CimInstance Win32_Process -Filter "name='gitea.exe'" |
-        Where-Object { $_.ExecutablePath -ieq $exe })
-}
-function Start-Gitea {
-    if (-not (Test-Path $exe)) {
-        throw "No gitea.exe in $root. Build or place the executable there before starting."
+function Find-Chrome {
+    $cmd = Get-Command chrome.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $paths = @(
+        (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')
+    )
+    foreach ($candidate in $paths) {
+        if (Test-Path $candidate) { return $candidate }
     }
+    throw 'Google Chrome not found.'
+}
+function Send-Reply {
+    param($stream, [int]$code, [string]$body, [string]$origin)
+    $reason = if ($code -eq 200) { 'OK' } else { 'Error' }
+    $bytes = [Text.Encoding]::UTF8.GetBytes($body)
+    $lines = @(
+        "HTTP/1.1 $code $reason",
+        'Content-Type: text/plain; charset=utf-8',
+        "Content-Length: $($bytes.Length)",
+        'Cache-Control: no-store',
+        'Connection: close'
+    )
+    if ($origin -match '^chrome-extension://[a-z]{32}$') {
+        $lines += "Access-Control-Allow-Origin: $origin"
+        $lines += 'Access-Control-Allow-Methods: POST, OPTIONS'
+        $lines += 'Access-Control-Allow-Headers: Authorization'
+    }
+    $head = [Text.Encoding]::ASCII.GetBytes(($lines -join [Environment]::NewLine) + [Environment]::NewLine + [Environment]::NewLine)
+    $stream.Write($head,0,$head.Length)
+    $stream.Write($bytes,0,$bytes.Length)
+    $stream.Flush()
+}
+if ($Action -eq 'Stop') { Stop-MyGitea; exit 0 }
+if ($Action -eq 'Pull') { Pull-MyGiteaSource; exit 0 }
+if (-not (Test-Path $exe)) { throw "Missing executable: $exe" }
+if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Chrome toolbar extension missing' }
+$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,3002)
+$listener.Start()
+try {
     Ensure-IsolatedConfig
     if (-not (Get-MyGiteaProcesses)) {
-        $args = @('web')
-        $args += @('--config', ('"' + $config + '"'))
-        Start-Process -FilePath $exe -ArgumentList $args -WorkingDirectory $root -WindowStyle Hidden | Out-Null
+        Start-Process -FilePath $exe -ArgumentList @('web','--config',('"' + $config + '"')) -WorkingDirectory $root -WindowStyle Hidden | Out-Null
     }
     $ready = $false
-    for ($i = 0; $i -lt 40; $i++) {
+    for ($i=0;$i -lt 40;$i++) {
         try {
-            $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-            if ($response.StatusCode -eq 200) { $ready = $true; break }
+            $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
+            if ($r.StatusCode -eq 200) { $ready=$true;break }
         } catch {}
         Start-Sleep -Milliseconds 500
     }
-    if (-not $ready) { throw "Gitea did not respond at $url" }
-    $chrome = Get-Command chrome.exe -ErrorAction SilentlyContinue
-    if (-not $chrome) {
-        foreach ($candidate in @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe", "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe", "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe")) {
-            if (Test-Path $candidate) { $chrome = @{ Source = $candidate }; break }
-        }
-    }
-    if (-not $chrome) { throw 'Google Chrome is not installed.' }
+    if (-not $ready) { throw "MyGitea2 not responding at $url" }
+    $chrome = Find-Chrome
     $profile = Join-Path $env:LOCALAPPDATA 'MyGitea2\ChromeProfile'
     New-Item -ItemType Directory -Force $profile | Out-Null
-    $process = Start-Process -FilePath $chrome.Source -ArgumentList @("--user-data-dir=`"$profile`"",'--app=http://127.0.0.1:3001/','--window-size=1280,850') -PassThru
-    $script:managedChromePid = $process.Id
-}
-function Stop-Gitea {
-    foreach ($process in (Get-MyGiteaProcesses)) {
-        Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+    $token = [guid]::NewGuid().ToString()
+    $chromeArgs = @(
+        ('--user-data-dir="' + $profile + '"'),
+        ('--load-extension="' + $extension + '"'),
+        '--no-first-run',
+        ('--app=' + $url + '#mygitea2-token=' + $token),
+        '--window-size=1280,850'
+    )
+    Start-Process -FilePath $chrome -ArgumentList $chromeArgs | Out-Null
+    Write-Host "MyGitea2: $url"
+    Write-Host 'Keep this PowerShell launcher open for Pull and Stop controls.'
+    while ($true) {
+        if (-not $listener.Pending()) {
+            Start-Sleep -Milliseconds 150
+            continue
+        }
+        $client = $listener.AcceptTcpClient()
+        try {
+            $client.ReceiveTimeout = 2500
+            $client.SendTimeout = 2500
+            $stream = $client.GetStream()
+            $reader = New-Object IO.StreamReader($stream,[Text.Encoding]::ASCII,$false,1024,$true)
+            $request = $reader.ReadLine()
+            $headers = @{}
+            while ($true) {
+                $line = $reader.ReadLine()
+                if ([string]::IsNullOrEmpty($line)) { break }
+                $colon = $line.IndexOf(':')
+                if ($colon -gt 0) {
+                    $headers[$line.Substring(0,$colon).Trim().ToLowerInvariant()] = $line.Substring($colon+1).Trim()
+                }
+            }
+            $origin = [string]$headers['origin']
+            if ($request -match '^OPTIONS /(?:pull|stop) HTTP/') {
+                Send-Reply $stream 200 '' $origin
+                continue
+            }
+            if ($headers['authorization'] -cne ('Bearer ' + $token)) {
+                Send-Reply $stream 403 'Unauthorized' $origin
+                continue
+            }
+            if ($request -match '^POST /pull HTTP/') {
+                try {
+                    $result = Pull-MyGiteaSource
+                    Send-Reply $stream 200 $result $origin
+                } catch {
+                    Send-Reply $stream 500 $_.Exception.Message $origin
+                }
+            } elseif ($request -match '^POST /stop HTTP/') {
+                Send-Reply $stream 200 'MyGitea2 stopping' $origin
+                Stop-MyGitea
+                break
+            } else {
+                Send-Reply $stream 404 'Unknown command' $origin
+            }
+        } catch {
+            Write-Warning $_.Exception.Message
+        } finally {
+            $client.Close()
+        }
     }
+} finally {
+    $listener.Stop()
 }
-function Pull-Source {
-    if (-not (Test-Path (Join-Path $root '.git'))) { throw 'This folder is not a Git checkout.' }
-    $dirty = @(git -C $root status --porcelain)
-    if ($LASTEXITCODE -ne 0) { throw 'Git status failed.' }
-    if ($dirty.Count -gt 0) { throw 'Local changes detected. Commit or stash before pulling.' }
-    $result = & git -C $root pull --ff-only origin main 2>&1
-    if ($LASTEXITCODE -ne 0) { throw ($result -join [Environment]::NewLine) }
-    return ($result -join [Environment]::NewLine)
-}
-if ($Action -eq 'Stop') { Stop-Gitea; exit 0 }
-if ($Action -eq 'Pull') { Write-Output (Pull-Source); exit 0 }
-Start-Gitea
-$form = New-Object System.Windows.Forms.Form
-$form.Text = 'MyGitea2 - Chrome controls'
-$form.Size = New-Object System.Drawing.Size(445,130)
-$form.StartPosition = 'CenterScreen'
-$form.FormBorderStyle = 'FixedToolWindow'
-$panel = New-Object System.Windows.Forms.FlowLayoutPanel
-$panel.Dock = 'Top'
-$panel.Height = 48
-$refresh = New-Object System.Windows.Forms.Button
-$refresh.Text = 'Auto Check: ON'
-$refresh.Width = 125
-$pull = New-Object System.Windows.Forms.Button
-$pull.Text = 'Pull GitHub'
-$pull.Width = 105
-$stop = New-Object System.Windows.Forms.Button
-$stop.Text = 'Stop Gitea'
-$stop.Width = 100
-$status = New-Object System.Windows.Forms.Label
-$status.Dock = 'Bottom'
-$status.Height = 30
-$status.Text = 'Gitea running'
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 15000
-$script:autoRefresh = $true
-$timer.Add_Tick({
-    if (-not $script:autoRefresh) { return }
-    try {
-        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-        $status.Text = "Server OK - $(Get-Date -Format HH:mm:ss)"
-    } catch { $status.Text = 'Server unavailable' }
-})
-$refresh.Add_Click({
-    $script:autoRefresh = -not $script:autoRefresh
-    $refresh.Text = if ($script:autoRefresh) { 'Auto Check: ON' } else { 'Auto Check: OFF' }
-})
-$pull.Add_Click({
-    try { $status.Text = Pull-Source }
-    catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Pull failed') | Out-Null }
-})
-$stop.Add_Click({ Stop-Gitea; $form.Close() })
-$panel.Controls.AddRange(@($refresh,$pull,$stop))
-$form.Controls.Add($panel)
-$form.Controls.Add($status)
-$timer.Start()
-$form.Add_FormClosed({ $timer.Stop();$timer.Dispose() })
-[void]$form.ShowDialog()
