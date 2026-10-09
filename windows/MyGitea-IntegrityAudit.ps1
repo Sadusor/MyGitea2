@@ -10,6 +10,12 @@ function Read-AuditPage {
     param([string]$uri,[string]$token,[switch]$Github)
     $raw = Invoke-SyncApi $uri $token -github:$Github
     if ($null -eq $raw) { return }
+    # Some Gitea empty-repository branch endpoints return JSON null, which
+    # Windows PowerShell Invoke-RestMethod exposes as the literal string 'null'.
+    if ($raw -is [string]) {
+        if ($raw.Trim() -eq 'null') { return }
+        throw ('Unexpected string response for Git refs from ' + $uri)
+    }
     $array = @($raw | ForEach-Object { if ($null -ne $_) { $_ } })
     # Invoke-RestMethod in Windows PowerShell can produce a single nested array.
     if ($array.Count -eq 1 -and $array[0] -is [array]) {
