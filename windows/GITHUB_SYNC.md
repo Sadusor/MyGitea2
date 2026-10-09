@@ -151,3 +151,20 @@ The full physical run returned **98 MATCH, 2 DIFFERENT, 3 MISSING, 8 ERROR**. Us
 ## Empty project clarification — 2026-10-09
 
 The user confirmed the eight previously errored repositories were intentionally created as empty project placeholders (folders/projects only; no code committed): `AiHub`, `assistant`, `Forgetrader`, `KiraPhoneBench`, `ORION-AI-BRIDGE`, `RememberAi`, `w`, and `website`. Treat `EMPTY` as an intentional, valid inventory state, **not as Git code verified or missing/corrupt**, provided the audit's output indeed labels those eight `EMPTY`. No dummy commits or migrations. The last explicitly pasted full-audit totals were earlier than the user's successful EMPTY rerun; do not record new numerical totals as physically verified until the user supplies them. Remaining `DIFFERENT` entries (cua and this actively-developed MyGitea2) and 3 MISSING remain deferred/read-only only.
+
+## FROZEN BASELINE — owner decision, 2026-10-09
+
+**Status: FROZEN. No further edits to MyGitea2 application, launcher, import/sync, audit scripts, configuration, database, stored Git repositories or LFS without new explicit owner approval.** This entry documents the freeze, not a request to update the local installation.
+
+Physical tests confirmed:
+- Separate Gitea at `http://127.0.0.1:3001`; original `E:\MyGitea` on port 3000 remains protected.
+- Root hidden START/STOP BATs work; STOP closes the dedicated Chrome app and leaves no matching hidden PowerShell controller.
+- Git remote `gitea` connects to `http://127.0.0.1:3001/MyGitea/MyGitea2.git`; existing GitHub `origin` retained.
+- Read-only Git connectivity succeeds; `git push gitea HEAD:refs/heads/local-push-test-20261009` succeeded; its remote commit hash matched local HEAD.
+- Personal `MYGITEA2_GIT_MANUAL.md` pushed to Gitea branch `docs-my-gitea-manual`; owner confirmed it displays correctly.
+- Full audit initially 98 matching Git-ref sets, two DIFFERENT (`cua`, `MyGitea2`), three MISSING (`bifrost`, `deepseek-harness`, `n8n`), eight ERROR subsequently diagnosed as intentionally empty project placeholders; after parser correction the user reports EMPTY statuses, but has not pasted the final full totals. Do not fabricate a subsequent exact count.
+- Approximate on-disk size: `E:\MyGitea2` 8.06 GiB, consisting primarily of `mygitea2-data\repositories` 7.201 GiB and `mygitea2-data\lfs` 0.705 GiB, SQLite DB ~3.6 MiB. No cleanup authorized.
+
+**Preservation rules:** No migration retries, deletions, Git ref force-pushes, branch merges, changing primary remotes, performance cleanup, or modifications of `E:\MyGitea` as part of this freeze. The three missing repos and any unmatched refs remain known exceptions, not acceptance to discard old data. A separate, verified off-device backup of MyGitea2 remains recommended but **not yet proven**. The local Gitea server is accessible to local PC Git/Hands workflows, but direct autonomous ORION Hands integration is **not yet tested**.
+
+This freeze note is recorded in GitHub documentation only; local files and local Gitea are left untouched.
