@@ -67,3 +67,9 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 - Auto Refresh is switched **OFF** during bulk execution to avoid reloading mid-operation. Keep the Chrome app and launcher open until it finishes; closing/reloading can interrupt the sequence.
 - **Important:** A successful API response means the migration request was accepted, not that all contents were verified. Check repositories in MyGitea2 after completion.
 - **Status:** Committed to GitHub; bulk import remains **UNTESTED on the user's PC**. Validate with a single small repository first, then proceed with bulk import after explicit user approval.
+
+## Physical test — 2026-10-09
+
+**PASS (user-confirmed):** One GitHub repository was imported successfully into the fresh MyGitea2 Gitea instance (port 3001) using saved local DPAPI credentials and the single-repository migration workflow. The repository name was not reported, so none is asserted here. This is the first end-to-end single-import proof. No bulk import success has yet been verified.
+
+**Next gate:** Refresh Sync GitHub preview; check that the successfully imported repository is counted as skipped and that the missing count decreased by one. Keep Auto Refresh off; only then begin a confirmed bulk import of remaining missing repositories. Treat API acceptance separately from actual verified completion.
