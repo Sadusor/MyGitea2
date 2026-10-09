@@ -18,7 +18,7 @@ After pulling changes, parse-check both `windows/MyGitea-Control.ps1` and `windo
 
 ## Acceptance gates
 
-1. Keys save successfully and tokens never appear in logs or source control.
+1. **PASS (user-confirmed 2026-10-09):** Keys form reported saved successfully after opening MyGitea2's dedicated Chrome profile. Actual decryption and API permissions are not yet independently tested. Never print tokens in logs or commit them to source control.
 2. Preview shows correct GitHub username and MyGitea2 username, repo counts, and skips current names.
 3. Import one harmless, small test repo explicitly.
 4. Verify repository contents and migration status in the MyGitea2 UI.
@@ -29,4 +29,24 @@ After pulling changes, parse-check both `windows/MyGitea-Control.ps1` and `windo
 - No bulk import or startup sync yet.
 - Looks at repositories owned by the authenticated GitHub user (not organization-owned repos).
 - Name collision means skip; it does not refresh existing repository contents.
-- Not yet tested on the user's Windows environment.
+- Windows UI Keys-save flow: **user-reported PASS** on 2026-10-09. Sync preview, API token validation, and repository import remain **NOT TESTED**.
+
+## Windows checkpoint: Keys save PASS — 2026-10-09
+
+**Observed:** The toolbar initially displayed `Save failed: No response from launcher` and the encrypted file was absent. After opening the dedicated MyGitea2 Chrome profile using the command below and continuing from that profile, the user reported **Keys saved**. This confirms the UI save milestone from the user's report; the precise underlying cause of the earlier no-response message has not been proven.
+
+To open the **correct MyGitea2 Chrome profile** (not regular Chrome), run in PowerShell:
+
+```powershell
+Start-Process "chrome.exe" -ArgumentList @(
+    "--user-data-dir=`"$env:LOCALAPPDATA\MyGitea2\ChromeProfile`"",
+    "--new-window",
+    "chrome://extensions"
+)
+```
+
+In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors click its **service worker** link and select Console. Chrome extensions installed in a different profile are not necessarily present in MyGitea2. Reload the extension there after a Git pull, and refresh the MyGitea2 dashboard.
+
+**Never paste or commit GitHub/Gitea API keys.** DPAPI-backed store is local to the Windows user at `%LOCALAPPDATA%\MyGitea2\keys.dpapi.json`.
+
+**Next safe test:** Click **Sync GitHub** once and inspect **preview only**; verify the GitHub account name and repo counts. Do not press **Import only selected repository** until preview passes. Original `E:\MyGitea` remains protected.
