@@ -115,6 +115,46 @@
       select.appendChild(option);
     }
     content.appendChild(select);
+    let bulkCancelled=false;
+    let bulkRunning=false;
+    const syncAll=formButton("Import ALL "+result.missing.length+" missing repositories",async()=>{
+      if(bulkRunning)return;
+      if(!confirm("Import ALL "+result.missing.length+" missing GitHub repositories into MyGitea2, one at a time? Existing names are skipped. This may take a while."))return;
+      bulkRunning=true;
+      bulkCancelled=false;
+      const previousAuto=auto;
+      auto=false;
+      sessionStorage.setItem("mygitea2-auto-refresh","no");
+      autoButton.textContent="Auto Refresh: OFF";
+      syncAll.disabled=true;
+      const report=document.createElement("pre");
+      report.style.cssText="white-space:pre-wrap;max-height:220px;overflow:auto;font:12px monospace";
+      content.appendChild(report);
+      let completed=0,failed=0;
+      for(const repo of result.missing){
+        if(bulkCancelled)break;
+        status.textContent="Import "+(completed+failed+1)+"/"+result.missing.length+": "+repo.name;
+        try{
+          const response=await chrome.runtime.sendMessage({action:"import",token,data:{full_name:repo.full_name}});
+          if(response?.ok){
+            completed++;
+            report.textContent+="PASS "+repo.full_name+"\n";
+          }else{
+            failed++;
+            report.textContent+="FAILED "+repo.full_name+": "+(response?.payload?.error||response?.payload?.message||"Unknown error")+"\n";
+          }
+        }catch(error){
+          failed++;
+          report.textContent+="FAILED "+repo.full_name+": "+String(error.message||error)+"\n";
+        }
+        report.scrollTop=report.scrollHeight;
+      }
+      status.textContent="Import submissions: "+completed+" accepted, "+failed+" failed"+(bulkCancelled?", cancelled":"");
+      line("Submitted "+completed+" migration requests; check Gitea to verify completed migrations. Auto Refresh is OFF.");
+      bulkRunning=false;
+      syncAll.disabled=false;
+    });
+    formButton("Cancel remaining imports",()=>{bulkCancelled=true;status.textContent="Stopping after current import...";});
     formButton("Import only selected repository",async()=>{
       const name=select.value;
       if(!confirm("Import "+name+" into MyGitea2?"))return;
