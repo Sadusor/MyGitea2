@@ -1,5 +1,8 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!sender.tab || !sender.tab.url?.startsWith("http://127.0.0.1:3001/")) return;
+  if (!sender.tab || !sender.url?.startsWith("http://127.0.0.1:3001/")) {
+    sendResponse({ ok: false, payload: { error: "Request origin is not MyGitea2" } });
+    return false;
+  }
   const actions = ["stop", "keys", "preview", "import"];
   if (!actions.includes(message?.action) || typeof message.token !== "string") return;
   const data = message.data && typeof message.data === "object" ? message.data : {};
