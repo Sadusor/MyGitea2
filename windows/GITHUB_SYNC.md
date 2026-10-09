@@ -88,3 +88,7 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 - **Fix committed:** `windows/MyGitea-Control.ps1` now posts a graceful `WM_CLOSE` to visible Chrome windows belonging to processes launched with the dedicated `%LOCALAPPDATA%\MyGitea2\ChromeProfile` profile, including their child processes. It then stops only MyGitea2's `gitea.exe` and the matching local controller. It does **not** target the user's normal Chrome profile or `E:\MyGitea`.
 - **Not yet physically verified:** Pull update, syntax-check, then STOP and START. Verify the MyGitea2 app window closes while ordinary Chrome windows stay open. If it fails, collect the observed behavior before modifying further.
 - The four migration failures (`bifrost`, `cua`, `deepseek-harness`, `n8n`) are **deferred by user request**. Do not retry or change migrations in this STOP/START task.
+
+## Hidden launcher test verified — 2026-10-09
+
+**PASS (user-confirmed):** Root hidden START opens the MyGitea2 app; root STOP closes the Chrome GUI; subsequent read-only Win32_Process enumeration for `powershell.exe` processes with command line containing `E:\MyGitea2\windows\MyGitea-Control.ps1` returned **no matching processes**. This proves no matching MyGitea2 PowerShell launcher remained after STOP. Original Gitea unchanged. Pending: read-only integrity audit for 107 migrated repositories; the four deferred imports remain untouched.
