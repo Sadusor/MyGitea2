@@ -12,7 +12,59 @@ function Get-MyGiteaProcesses {
     @(Get-CimInstance Win32_Process -Filter "name='gitea.exe'" |
         Where-Object { $_.ExecutablePath -ieq $exe })
 }
+function Close-MyGiteaChrome {
+    # Identify only Chrome instances using MyGitea2's dedicated profile.
+    # Do not close windows belonging to the normal Chrome profile.
+    $profile = Join-Path $env:LOCALAPPDATA 'MyGitea2\ChromeProfile'
+    $chromeProcesses = @(Get-CimInstance Win32_Process -Filter "name='chrome.exe'")
+    $roots = @($chromeProcesses | Where-Object {
+        $_.CommandLine -and
+        $_.CommandLine.IndexOf('MyGitea2\ChromeProfile', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+        $_.CommandLine.IndexOf('--user-data-dir', [StringComparison]::OrdinalIgnoreCase) -ge 0
+    })
+    if ($roots.Count -eq 0) { return }
+    $managed = @{}
+    foreach ($rootProcess in $roots) { $managed[[int]$rootProcess.ProcessId] = $true }
+    # Chrome creates child renderer/browser processes. Include only children of
+    # the confirmed dedicated-profile process(es).
+    for ($pass = 0; $pass -lt 12; $pass++) {
+        $changed = $false
+        foreach ($proc in $chromeProcesses) {
+            if ($managed.ContainsKey([int]$proc.ParentProcessId) -and
+                -not $managed.ContainsKey([int]$proc.ProcessId)) {
+                $managed[[int]$proc.ProcessId] = $true
+                $changed = $true
+            }
+        }
+        if (-not $changed) { break }
+    }
+    if (-not ('MyGiteaWindowCloser' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class MyGiteaWindowCloser {
+    public delegate bool WindowCallback(IntPtr handle, IntPtr state);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(WindowCallback callback, IntPtr state);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr handle);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
+}
+'@
+    }
+    $callback = [MyGiteaWindowCloser+WindowCallback] {
+        param([IntPtr]$handle, [IntPtr]$state)
+        [uint32]$ownerId = 0
+        [void][MyGiteaWindowCloser]::GetWindowThreadProcessId($handle, [ref]$ownerId)
+        if ($managed.ContainsKey([int]$ownerId) -and
+            [MyGiteaWindowCloser]::IsWindowVisible($handle)) {
+            [void][MyGiteaWindowCloser]::PostMessage($handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+        }
+        return $true
+    }
+    [void][MyGiteaWindowCloser]::EnumWindows($callback, [IntPtr]::Zero)
+}
 function Stop-MyGitea {
+    Close-MyGiteaChrome
     foreach ($proc in (Get-MyGiteaProcesses)) {
         Stop-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
     }
