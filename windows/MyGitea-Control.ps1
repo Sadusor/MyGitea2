@@ -121,7 +121,18 @@ function Send-Reply {
     $stream.Write($bytes,0,$bytes.Length)
     $stream.Flush()
 }
-if ($Action -eq 'Stop') { Stop-MyGitea; exit 0 }
+if ($Action -eq 'Stop') {
+    Stop-MyGitea
+    $controlPath = Join-Path $PSScriptRoot 'MyGitea-Control.ps1'
+    Get-CimInstance Win32_Process -Filter "name='powershell.exe'" |
+        Where-Object {
+            $_.ProcessId -ne $PID -and
+            $_.CommandLine -and
+            $_.CommandLine.IndexOf($controlPath, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
+    exit 0
+}
 if ($Action -eq 'Pull') { Pull-MyGiteaSource; exit 0 }
 if (-not (Test-Path $exe)) { throw "Missing executable: $exe" }
 if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Chrome toolbar extension missing' }
