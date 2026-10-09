@@ -10,7 +10,7 @@ function Read-AuditPage {
     param([string]$uri,[string]$token,[switch]$Github)
     $raw = Invoke-SyncApi $uri $token -github:$Github
     if ($null -eq $raw) { return }
-    $array = @($raw | ForEach-Object { $_ })
+    $array = @($raw | ForEach-Object { if ($null -ne $_) { $_ } })
     # Invoke-RestMethod in Windows PowerShell can produce a single nested array.
     if ($array.Count -eq 1 -and $array[0] -is [array]) {
         $array = @($array[0] | ForEach-Object { $_ })
@@ -37,8 +37,9 @@ function Ref-Map {
     param([object[]]$items,[string]$kind,[switch]$Github)
     $map = @{}
     foreach ($item in $items) {
-        if ($null -eq $item -or $item.name -isnot [string]) {
-            throw 'Unrecognized branch or tag API entry.'
+        if ($null -eq $item) { continue }
+        if ($item.name -isnot [string]) {
+            throw ('Unrecognized {0} API entry from {1}: type={2}' -f $kind, $(if ($Github) { 'GitHub' } else { 'MyGitea2' }), $item.GetType().FullName)
         }
         $sha = [string]$item.commit.sha
         if (-not $Github -and $kind -eq 'branch') { $sha = [string]$item.commit.id }
@@ -82,7 +83,7 @@ function Compare-Refs {
         }
     }
     @{
-        Status = if ($differences.Count -eq 0) { 'MATCH' } else { 'DIFFERENT' }
+        Status = if ($differences.Count -gt 0) { 'DIFFERENT' } elseif ($githubMap.Count -eq 0) { 'EMPTY' } else { 'MATCH' }
         BranchesAndTagsGithub = $githubMap.Count
         BranchesAndTagsGitea = $giteaMap.Count
         Details = ($differences -join '; ')
@@ -156,12 +157,13 @@ $summary = @{
     Match=@($records | Where-Object Status -eq 'MATCH').Count
     Different=@($records | Where-Object Status -eq 'DIFFERENT').Count
     Missing=@($records | Where-Object Status -eq 'MISSING').Count
+    Empty=@($records | Where-Object Status -eq 'EMPTY').Count
     Error=@($records | Where-Object Status -eq 'ERROR').Count
     Limited=($MaxRepositories -gt 0)
     Note='Compares branch/tag commit hashes only; does not verify issues, pull requests, LFS, or unchanged GitHub state since migration.'
 }
 [IO.File]::WriteAllText($jsonPath,(ConvertTo-Json -InputObject @{summary=$summary;repositories=@($records)} -Depth 8))
 $keys = $null
-Write-Host ('MATCH {0}; DIFFERENT {1}; MISSING {2}; ERROR {3}' -f $summary.Match,$summary.Different,$summary.Missing,$summary.Error)
+Write-Host ('MATCH {0}; EMPTY {1}; DIFFERENT {2}; MISSING {3}; ERROR {4}' -f $summary.Match,$summary.Empty,$summary.Different,$summary.Missing,$summary.Error)
 Write-Host ('CSV report: ' + $csvPath)
 Write-Host ('JSON report: ' + $jsonPath)
