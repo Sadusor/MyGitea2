@@ -137,3 +137,9 @@ Expected starting situation before running (not a predicted result): the user pr
 **Interpretation:** 98 repos have matching exposed Git branch/tag refs and commit IDs. `cua` is **present**, contrary to the earlier four-missing assumption, but Git ref parity differs. `MyGitea2` may differ because the source continues to receive code changes; investigate exact ref mismatches before concluding. Eight ERRORs require inspection of the `Details` field; they do not establish corruption or missing code. No destructive action or new import authorized. User has deferred missing imports. Preserve `E:\MyGitea` original.
 
 **Next safe read-only step:** show CSV rows with status other than MATCH, including `Details`. Diagnose error categories first; keep secrets out of output.
+
+## Integrity audit: empty API entries correction — 2026-10-09
+
+The full physical run returned **98 MATCH, 2 DIFFERENT, 3 MISSING, 8 ERROR**. User inspected errors: `Unrecognized branch or tag API entry.` for at least `Forgetrader`, `KiraPhoneBench`, `ORION-AI-BRIDGE`, `RememberAi`, `w`, `website` (same status for `AiHub` and `assistant`).
+
+**Code correction:** The read-only audit now ignores null placeholders returned when PowerShell enumerates empty branch/tag arrays, while rejecting other malformed records with source information. Repositories with **zero branch/tag refs on both sides** are classified as `EMPTY`, **not `MATCH`**, because zero refs is not meaningful proof of Git code parity. Report summary includes `Empty`. This change is committed but **awaits rerun**; previous counts remain the only physically observed totals. `MyGitea2` differed on `main` because its GitHub commit hash had advanced relative to the imported Gitea branch (`44a992af…` versus `095468eb…` at observation time). At least one other difference is `branch:docs/custom-ipsw exists only in MyGitea2`; preserve until diagnosed. Do not auto-sync Git refs or touch original Gitea.
