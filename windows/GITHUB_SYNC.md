@@ -118,3 +118,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "E:\MyGitea2\windows\MyG
 Expected starting situation before running (not a predicted result): the user previously observed **107/111 repositories present**, four deferred API migration failures (`bifrost`, `cua`, `deepseek-harness`, `n8n`). No claim of 107 hash matches is made until a report is generated. The integrity script has been committed and reviewed for consistency, but **has not yet passed a physical PowerShell run**.
 
 **Safety:** Never paste GitHub/Gitea tokens in chat; the script reads the existing DPAPI keys locally. Reports include repository names and hashes, not tokens. Do not delete the original `E:\MyGitea` installation based on a single branch comparison.
+
+## Read-only audit smoke test — 2026-10-09
+
+**User-confirmed PASS (physical Windows PowerShell run):** `MyGitea-IntegrityAudit.ps1 -MaxRepositories 1` checked `Sadusor/agency-agents`: **MATCH 1, DIFFERENT 0, MISSING 0, ERROR 0**. Reports generated at `%LOCALAPPDATA%\MyGitea2\Audit\integrity-20261009-184944.csv` and corresponding `.json`. The first-run audit therefore exercises authentication and report generation on Windows, but the **full 111-repository audit is still pending**. No repositories modified.
