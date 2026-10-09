@@ -73,3 +73,11 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 **PASS (user-confirmed):** One GitHub repository was imported successfully into the fresh MyGitea2 Gitea instance (port 3001) using saved local DPAPI credentials and the single-repository migration workflow. The repository name was not reported, so none is asserted here. This is the first end-to-end single-import proof. No bulk import success has yet been verified.
 
 **Next gate:** Refresh Sync GitHub preview; check that the successfully imported repository is counted as skipped and that the missing count decreased by one. Keep Auto Refresh off; only then begin a confirmed bulk import of remaining missing repositories. Treat API acceptance separately from actual verified completion.
+
+## Bulk-import checkpoint and launcher convenience — 2026-10-09
+
+- **User-verified:** 111 GitHub repositories discovered; 107 shown as imported/skipped in Gitea. Remaining 4 repos: `Sadusor/bifrost`, `Sadusor/cua`, `Sadusor/deepseek-harness`, `Sadusor/n8n`.
+- **FAIL:** Retrying those four through Gitea's migration API produced HTTP 500 for all four. Do not auto-retry blindly; inspect local Gitea logs for root causes and distinguish migration errors from Git transfer errors. All 107 present repos should remain untouched.
+- **Convenience scripts added at repository root:** `START MyGitea2.bat`, `STOP MyGitea2.bat`; both use `windows/MyGitea-Hidden.vbs` to launch PowerShell hidden. Original `windows/START MyGitea.bat` and `windows/STOP MyGitea.bat` remain available for console diagnostics.
+- Root START detects an existing MyGitea2 launcher and declines to start another copy. Root STOP stops the MyGitea2 server and its matching PowerShell control-listener launcher; it does not target the old `E:\MyGitea` installation.
+- **Status:** Root BAT/VBS convenience launchers committed, **not yet physically tested**. Verify syntax, hidden operation and START/STOP after preserving runtime status. Never stop the application during imports.
