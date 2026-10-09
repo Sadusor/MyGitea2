@@ -65,6 +65,10 @@ PATH = $data\lfs
         [IO.File]::WriteAllText($config, $ini)
     }
     $ini = Get-Content -Raw $config
+    if (-not $ini.Contains('LFS_CONTENT_PATH = ')) {
+        $ini = $ini.Replace('OFFLINE_MODE = true', ('OFFLINE_MODE = true' + [Environment]::NewLine + "LFS_CONTENT_PATH = $data\lfs"))
+        [IO.File]::WriteAllText($config,$ini)
+    }
     $required = @(
         'HTTP_PORT = 3001',
         'HTTP_ADDR = 127.0.0.1',
@@ -161,7 +165,7 @@ try {
             $client.ReceiveTimeout = 2500
             $client.SendTimeout = 2500
             $stream = $client.GetStream()
-            $reader = New-Object IO.StreamReader($stream,[Text.Encoding]::ASCII,$false,1024,$true)
+            $reader = [IO.StreamReader]::new($stream,[Text.Encoding]::ASCII,$false,1024,$true)
             $request = $reader.ReadLine()
             $headers = @{}
             while ($true) {
