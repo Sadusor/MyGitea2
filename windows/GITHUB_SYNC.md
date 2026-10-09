@@ -57,3 +57,13 @@ In that window, check **MyGitea2 Local Controls** is enabled; to inspect errors 
 - **Root cause identified in code:** Windows PowerShell API response arrays could be wrapped as one nested array; the preview treated that array as one repository object and interpolated all `full_name` fields together.
 - **Fix:** `windows/MyGitea-Sync.ps1` expands nested arrays for GitHub and Gitea listings, validates each `owner/repo` item, and refuses an invalid preview before any import.
 - **Status:** Committed; **NOT YET TESTED on Windows**. Next test: stop the MyGitea2 *launcher* safely, pull changes, parse-check scripts, restart launcher, use Sync GitHub for **preview only**. Expected: multiple distinct dropdown options and sensible repository count. Do not click Import until verified.
+
+## Bulk import UI update — 2026-10-09
+
+- Preview list and token authentication were user-reported working.
+- Added **Import ALL missing repositories** to the Chrome toolbar. The user must confirm before any import.
+- Imports are submitted **sequentially** (one API migration request per missing repository). The UI shows per-repository accepted/failed results and provides **Cancel remaining imports**; cancellation takes effect after the current request.
+- Existing destination repository names are excluded by the preview and rechecked via `Import-SyncOne`. This is **migration**, not background mirror sync of already imported repositories.
+- Auto Refresh is switched **OFF** during bulk execution to avoid reloading mid-operation. Keep the Chrome app and launcher open until it finishes; closing/reloading can interrupt the sequence.
+- **Important:** A successful API response means the migration request was accepted, not that all contents were verified. Check repositories in MyGitea2 after completion.
+- **Status:** Committed to GitHub; bulk import remains **UNTESTED on the user's PC**. Validate with a single small repository first, then proceed with bulk import after explicit user approval.
